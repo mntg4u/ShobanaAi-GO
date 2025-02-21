@@ -1,0 +1,62 @@
+const TelegramBot = require('node-telegram-bot-api');
+const axios = require('axios');
+const JSON.stringify = require('json-stringify-safe');
+
+const bot = new TelegramBot('YOUR_BOT_TOKEN', { polling: true });
+
+const convMem = {};
+
+bot.on('message', (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.username;
+
+  if (msg.text === '/start') {
+    log(Received start command from ${userId});
+
+    // Send start message with photo and inline buttons
+    const photo = { file_id: 'FILE_ID', filename: 'start_photo.jpg' };
+    const caption = 'Welcome to our chatbot! 👋';
+    const btns = [
+      { text: 'Subscribe to our channel', url: 'https://t.me/YourChannelUsername' },
+      { text: 'Learn more about us', callback: 'learn_more' },
+    ];
+    const inlineKeyboard = [btns];
+    const message = { chatId, photo, caption, reply_markup: { inline_keyboard: inlineKeyboard } };
+
+    bot.sendMessage(message)
+      .then((message) => {
+        log(Sent start message to ${userId});
+      })
+      .catch((err) => {
+        log(err);
+      });
+  } else {
+    log(Received message from ${userId});
+
+    convMem[chatId] = convMem[chatId] || [];
+    convMem[chatId].push({ role: 'user', content: msg.text });
+
+    const payload = {
+      model: 'gpt-4o',
+      messages: convMem[chatId],
+    };
+
+    axios.post('https://mangooapi.onrender.com/mango', payload)
+      .then((response) => {
+        const responseBody = response.data;
+        convMem[chatId].push({ role: 'assistant', content: responseBody.choices[0].message.content });
+
+        const replyMessage = { chatId, text: responseBody.choices[0].message.content };
+        bot.sendMessage(replyMessage)
+          .then((message) => {
+            log(Sent response to ${userId});
+          })
+          .catch((err) => {
+            log(err);
+          });
+      })
+      .catch((err) => {
+        log(err);
+      });
+  }
+});
